@@ -10,7 +10,7 @@ chat_completion = client.chat.completions.create(
         },
         {
             "role": "user",
-            "content": "Who is BTS?",
+            "content": "Who is langchain?",
         }
     ],
     model="gpt-4-1106-preview",
