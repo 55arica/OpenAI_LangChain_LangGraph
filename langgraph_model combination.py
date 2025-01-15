@@ -20,7 +20,7 @@ def qwen_response(input_text):
 # --- Llama2 Model Node ---
 def llama_response(input_text):
     llm = CTransformers(
-        model="llama-2-model-path",  # Replace with your model path
+        model=" ",
         model_type="llama",
         config={
             "max_new_tokens": 256,
@@ -53,10 +53,10 @@ gpt4_refine_node = Node(name="GPT-4 Refinement", func=refine_response_with_gpt4)
 
 # --- Combine Nodes in a Workflow ---
 def handle_query(input_text):
-    qwen_output = qwen_node.run(input_text)  # Call the Qwen model node
-    llama_output = llama_node.run(input_text)  # Call the Llama2 model node
+    qwen_output = qwen_node.run(input_text)  
+    llama_output = llama_node.run(input_text)
     combined_output = f"Qwen Response: {qwen_output}\n\nLlama2 Response: {llama_output}"
-    refined_response = gpt4_refine_node.run(combined_output)  # Refine the combined output with GPT-4
+    refined_response = gpt4_refine_node.run(combined_output)
     return refined_response
 
 # --- Flask API Setup ---
