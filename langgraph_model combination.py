@@ -5,8 +5,7 @@ from transformers import GenerationConfig
 from langchain import PromptTemplate, LLMChain
 from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
 
-# Set your OpenAI API key
-openai.api_key = "your_openai_api_key"
+=openai.api_key = ""
 
 # --- Qwen Model Node ---
 def qwen_response(input_text):
