@@ -1,11 +1,11 @@
+from langgraph import Node
 from flask import Flask, request, jsonify
 import openai
-from transformers import AutoModelForCausalLM, AutoTokenizer
-from transformers import GenerationConfig
+from transformers import AutoModelForCausalLM, AutoTokenizer, GenerationConfig
 from langchain import PromptTemplate, LLMChain
 from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
 
-=openai.api_key = ""
+openai.api_key = ""
 
 # --- Qwen Model Node ---
 def qwen_response(input_text):
@@ -35,11 +35,6 @@ def llama_response(input_text):
     llm_chain = LLMChain(prompt=prompt, llm=llm)
     return llm_chain.run({"question": input_text})
 
-# --- Combine Responses ---
-def combine_responses(qwen_output, llama_output):
-    combined_output = f"Qwen Response: {qwen_output}\n\nLlama2 Response: {llama_output}"
-    return combined_output
-
 # --- Refine Response with GPT-4 ---
 def refine_response_with_gpt4(combined_output):
     response = openai.ChatCompletion.create(
@@ -51,6 +46,19 @@ def refine_response_with_gpt4(combined_output):
     )
     return response['choices'][0]['message']['content']
 
+# --- Define LangGraph Nodes ---
+qwen_node = Node(name="Qwen Model", func=qwen_response)
+llama_node = Node(name="Llama2 Model", func=llama_response)
+gpt4_refine_node = Node(name="GPT-4 Refinement", func=refine_response_with_gpt4)
+
+# --- Combine Nodes in a Workflow ---
+def handle_query(input_text):
+    qwen_output = qwen_node.run(input_text)  # Call the Qwen model node
+    llama_output = llama_node.run(input_text)  # Call the Llama2 model node
+    combined_output = f"Qwen Response: {qwen_output}\n\nLlama2 Response: {llama_output}"
+    refined_response = gpt4_refine_node.run(combined_output)  # Refine the combined output with GPT-4
+    return refined_response
+
 # --- Flask API Setup ---
 app = Flask(__name__)
 
@@ -61,16 +69,8 @@ def query():
     if not user_input:
         return jsonify({"error": "Query not provided"}), 400
     
-    # Run Qwen model
-    qwen_output = qwen_response(user_input)
-    
-    # Run Llama2 model
-    llama_output = llama_response(user_input)
-    
-    combined_output = combine_responses(qwen_output, llama_output)
-    
-    # Refine combined output with GPT-4
-    refined_response = refine_response_with_gpt4(combined_output)
+    # Handle query and get refined response
+    refined_response = handle_query(user_input)
     
     # Return the final refined response
     return jsonify({"response": refined_response})
