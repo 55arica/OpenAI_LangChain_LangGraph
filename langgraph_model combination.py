@@ -68,7 +68,6 @@ def query():
     # Run Llama2 model
     llama_output = llama_response(user_input)
     
-    # Combine outputs from both models
     combined_output = combine_responses(qwen_output, llama_output)
     
     # Refine combined output with GPT-4
