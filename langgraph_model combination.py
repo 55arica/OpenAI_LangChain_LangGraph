@@ -1,10 +1,14 @@
-from langgraph import Node, Graph
-from langchain import PromptTemplate, LLMChain
-from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
+from flask import Flask, request, jsonify
+import openai
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from transformers import GenerationConfig
+from langchain import PromptTemplate, LLMChain
+from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
 
-# Qwen Node
+# Set your OpenAI API key
+openai.api_key = "your_openai_api_key"
+
+# --- Qwen Model Node ---
 def qwen_response(input_text):
     model = AutoModelForCausalLM.from_pretrained(
         "Qwen/Qwen-7B-Chat", device_map="auto", trust_remote_code=True, bf16=True
@@ -14,12 +18,10 @@ def qwen_response(input_text):
     response, _ = model.chat(tokenizer, input_text, history=None)
     return response
 
-qwen_node = Node(name="Qwen Model", func=qwen_response)
-
-# Llama2 Node
+# --- Llama2 Model Node ---
 def llama_response(input_text):
     llm = CTransformers(
-        model="llama-2-model-path",
+        model="llama-2-model-path",  # Replace with your model path
         model_type="llama",
         config={
             "max_new_tokens": 256,
@@ -34,45 +36,46 @@ def llama_response(input_text):
     llm_chain = LLMChain(prompt=prompt, llm=llm)
     return llm_chain.run({"question": input_text})
 
-llama_node = Node(name="Llama2 Model", func=llama_response)
-
-# Combine Responses Node
+# --- Combine Responses ---
 def combine_responses(qwen_output, llama_output):
-    return f"Combined response:\n- Qwen: {qwen_output}\n- Llama2: {llama_output}"
+    combined_output = f"Qwen Response: {qwen_output}\n\nLlama2 Response: {llama_output}"
+    return combined_output
 
-combine_node = Node(name="Combine Responses", func=combine_responses)
-
-# Refine Response Node
-def refine_response(combined_output):
-    refined_prompt = f"Refine the following response:\n\n{combined_output}\n\nFinal Answer:"
-    llm = CTransformers(
-        model="llama-2-refine-model-path",
-        model_type="llama",
-        config={
-            "max_new_tokens": 256,
-            "temperature": 0.5,
-            "top_p": 0.85,
-            "stream": False
-        },
-        callbacks=[StreamingStdOutCallbackHandler()],
+# --- Refine Response with GPT-4 ---
+def refine_response_with_gpt4(combined_output):
+    response = openai.ChatCompletion.create(
+        model="gpt-4",
+        messages=[
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": f"Refine the following response:\n\n{combined_output}"}
+        ]
     )
-    prompt = PromptTemplate(template="{refined_prompt}", input_variables=["refined_prompt"])
-    llm_chain = LLMChain(prompt=prompt, llm=llm)
-    return llm_chain.run({"refined_prompt": refined_prompt})
+    return response['choices'][0]['message']['content']
 
-refine_node = Node(name="Refine Response", func=refine_response)
+# --- Flask API Setup ---
+app = Flask(__name__)
 
-# Define the LangGraph Workflow
-graph = Graph(
-    nodes=[qwen_node, llama_node, combine_node, refine_node],
-    edges=[
-        (qwen_node, combine_node),
-        (llama_node, combine_node),
-        (combine_node, refine_node),
-    ],
-)
+@app.route('/query', methods=['POST'])
+def query():
+    data = request.json
+    user_input = data.get("query", "")
+    if not user_input:
+        return jsonify({"error": "Query not provided"}), 400
+    
+    # Run Qwen model
+    qwen_output = qwen_response(user_input)
+    
+    # Run Llama2 model
+    llama_output = llama_response(user_input)
+    
+    # Combine outputs from both models
+    combined_output = combine_responses(qwen_output, llama_output)
+    
+    # Refine combined output with GPT-4
+    refined_response = refine_response_with_gpt4(combined_output)
+    
+    # Return the final refined response
+    return jsonify({"response": refined_response})
 
-# Input and Run the Workflow
-user_input = input("Enter your query: ")
-final_response = graph.run(user_input)
-print("Final Response:", final_response)
+if __name__ == "__main__":
+    app.run(debug=True)
